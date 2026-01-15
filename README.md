@@ -43,6 +43,7 @@ A built-in AI chatbot that provides instant, offline-ready guidance for:
 * **Backend Integration:** HTTP (REST API)
 * **UI Components:** Custom animated widgets, Curvy UI design, Pulse animations.
 
+
 ---
 
 ## 🚀 Getting Started
