@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
+import 'dart:async';
 
+// 1. Define Auth Status
 enum AuthStatus {
   initial,
   loading,
@@ -11,6 +11,7 @@ enum AuthStatus {
   connectionError,
 }
 
+// 2. Define the User Model locally (Mock)
 class User {
   final String id;
   final String username;
@@ -31,41 +32,24 @@ class User {
   });
 
   String get fullName => '$firstName $lastName';
-
-  factory User.fromJson(Map<String, dynamic> json) {
-    return User(
-      id: json['id'] ?? '',
-      username: json['username'] ?? '',
-      email: json['email'] ?? '',
-      firstName: json['first_name'] ?? '',
-      lastName: json['last_name'] ?? '',
-      phoneNumber: json['phone_number'] ?? '',
-      role: json['role'] ?? 'CITIZEN',
-    );
-  }
 }
 
+// 3. The Mock Provider
 class AuthProvider with ChangeNotifier {
-  String? _token;
-  String? _refreshToken;
+  String? _token; // Fake token
+  String? _refreshToken; // Fake refresh token
   User? _user;
   AuthStatus _status = AuthStatus.initial;
   String? _errorMessage;
-  String? _city;
-  double? _latitude;
-  double? _longitude;
+  String? _city = "Dhaka"; // Default Demo Location
+  double? _latitude = 23.8103;
+  double? _longitude = 90.4125;
 
-  // Base API URL - Updated to use 10.0.2.2 for Android emulator
-  final String _baseUrl = 'http://10.0.2.2:8000/api';
-
-  // Helper method to construct API URLs
-  String _buildUrl(String endpoint) {
-    return '$_baseUrl/${endpoint.startsWith('/') ? endpoint.substring(1) : endpoint}';
-  }
-
-  // Getters
+  // --- FIX: Added the missing token getters here ---
   String? get token => _token;
   String? get refreshToken => _refreshToken;
+  
+  // Existing Getters
   User? get user => _user;
   AuthStatus get status => _status;
   bool get isAuthenticated => _status == AuthStatus.authenticated;
@@ -73,8 +57,9 @@ class AuthProvider with ChangeNotifier {
   String? get city => _city;
   double? get latitude => _latitude;
   double? get longitude => _longitude;
+  String? get userRole => _user?.role;
 
-  // Set user location
+  // Set user location (Mock)
   void setUserLocation(String? city, double? latitude, double? longitude) {
     _city = city;
     _latitude = latitude;
@@ -82,64 +67,59 @@ class AuthProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  // Login method
+  // --- MOCK LOGIN ---
   Future<bool> login(String username, String password) async {
-    try {
-      _status = AuthStatus.loading;
-      _errorMessage = null;
-      notifyListeners();
+    _status = AuthStatus.loading;
+    _errorMessage = null;
+    notifyListeners();
 
-      final response = await http.post(
-        Uri.parse(_buildUrl('users/login/')),
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode({'username': username, 'password': password}),
+    // Fake network delay for realism
+    await Future.delayed(const Duration(seconds: 1));
+
+    try {
+      // DEMO LOGIC: Determine role based on username
+      String role = 'CITIZEN';
+      String uid = 'user_123';
+      
+      final lowerName = username.toLowerCase();
+      if (lowerName.contains('admin')) {
+        role = 'ADMIN';
+      } else if (lowerName.contains('fire')) {
+        role = 'FIRE_STATION';
+        uid = 'fire_station_01';
+      } else if (lowerName.contains('police')) {
+        role = 'POLICE';
+        uid = 'police_station_01';
+      } else if (lowerName.contains('vol') || lowerName.contains('red')) {
+        role = 'RED_CRESCENT';
+        uid = 'volunteer_01';
+      }
+
+      // Create the fake user
+      _user = User(
+        id: uid,
+        username: username,
+        email: '$username@resq.demo',
+        firstName: "Demo",
+        lastName: role == 'CITIZEN' ? "User" : "Officer",
+        phoneNumber: "+8801700000000",
+        role: role,
       );
 
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-
-        _token = data['access'];
-        _refreshToken = data['refresh'];
-        _user = User.fromJson(data['user']);
-        _status = AuthStatus.authenticated;
-
-        // Check if location data is available in the response
-        if (data['user'] != null && data['user']['location'] != null) {
-          final location = data['user']['location'];
-          if (location['city'] != null) {
-            _city = location['city'];
-          }
-          if (location['latitude'] != null) {
-            _latitude = location['latitude'];
-          }
-          if (location['longitude'] != null) {
-            _longitude = location['longitude'];
-          }
-        }
-
-        notifyListeners();
-        return true;
-      } else if (response.statusCode >= 400 && response.statusCode < 500) {
-        final data = json.decode(response.body);
-        _errorMessage = data['detail'] ?? 'Authentication failed';
-        _status = AuthStatus.unauthenticated;
-        notifyListeners();
-        return false;
-      } else {
-        _errorMessage = 'Server error, please try again later';
-        _status = AuthStatus.error;
-        notifyListeners();
-        return false;
-      }
+      _token = "fake_demo_token_12345";
+      _refreshToken = "fake_demo_refresh_token_123";
+      _status = AuthStatus.authenticated;
+      notifyListeners();
+      return true;
     } catch (e) {
-      _errorMessage = 'Connection error: ${e.toString()}';
-      _status = AuthStatus.connectionError;
+      _errorMessage = "Demo Error: ${e.toString()}";
+      _status = AuthStatus.error;
       notifyListeners();
       return false;
     }
   }
 
-  // Register method
+  // --- MOCK REGISTER ---
   Future<bool> register({
     required String username,
     required String email,
@@ -152,69 +132,32 @@ class AuthProvider with ChangeNotifier {
     required double longitude,
     required String address,
   }) async {
-    try {
-      _status = AuthStatus.loading;
-      _errorMessage = null;
-      notifyListeners();
+    _status = AuthStatus.loading;
+    _errorMessage = null;
+    notifyListeners();
 
-      final requestBody = {
-        'username': username,
-        'email': email,
-        'password': password,
-        'first_name': firstName,
-        'last_name': lastName,
-        'phone_number': phoneNumber,
-        'role': role,
-        'location': {
-          'latitude': latitude,
-          'longitude': longitude,
-          'address': address,
-        },
-      };
+    await Future.delayed(const Duration(seconds: 1));
 
-      print('Registration request: ${json.encode(requestBody)}');
-
-      final response = await http.post(
-        Uri.parse(_buildUrl('users/register/')),
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode(requestBody),
-      );
-
-      // Log the response for debugging
-      print('Registration response status: ${response.statusCode}');
-      print('Registration response body: ${response.body}');
-
-      if (response.statusCode == 201) {
-        final data = json.decode(response.body);
-
-        _token = data['access'];
-        _refreshToken = data['refresh'];
-        _user = User.fromJson(data['user']);
-        _status = AuthStatus.authenticated;
-
-        notifyListeners();
-        return true;
-      } else if (response.statusCode >= 400 && response.statusCode < 500) {
-        final data = json.decode(response.body);
-        _errorMessage = _formatErrorMessage(data);
-        _status = AuthStatus.unauthenticated;
-        notifyListeners();
-        return false;
-      } else {
-        _errorMessage = 'Server error, please try again later';
-        _status = AuthStatus.error;
-        notifyListeners();
-        return false;
-      }
-    } catch (e) {
-      _errorMessage = 'Connection error: ${e.toString()}';
-      _status = AuthStatus.connectionError;
-      notifyListeners();
-      return false;
-    }
+    // Allow registration to always succeed
+    _user = User(
+      id: 'new_user_${DateTime.now().millisecondsSinceEpoch}',
+      username: username,
+      email: email,
+      firstName: firstName,
+      lastName: lastName,
+      phoneNumber: phoneNumber,
+      role: role,
+    );
+    
+    _token = "fake_demo_token_new";
+    _refreshToken = "fake_demo_refresh_token_new";
+    _status = AuthStatus.authenticated;
+    
+    notifyListeners();
+    return true;
   }
 
-  // Logout method
+  // --- MOCK LOGOUT ---
   Future<void> logout() async {
     _token = null;
     _refreshToken = null;
@@ -223,163 +166,62 @@ class AuthProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  // Refresh user profile
+  // --- MOCK PROFILE REFRESH ---
   Future<bool> refreshUserProfile() async {
-    if (_token == null) {
-      _status = AuthStatus.unauthenticated;
-      notifyListeners();
-      return false;
-    }
-
-    try {
-      final response = await http.get(
-        Uri.parse(_buildUrl('users/me/')),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $_token',
-        },
-      );
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        _user = User.fromJson(data);
-        _status = AuthStatus.authenticated;
-        notifyListeners();
-        return true;
-      } else if (response.statusCode == 401) {
-        // Token expired
-        _status = AuthStatus.unauthenticated;
-        _errorMessage = 'Session expired, please login again';
-        notifyListeners();
-        return false;
-      } else {
-        _errorMessage = 'Failed to load profile';
-        _status = AuthStatus.error;
-        notifyListeners();
-        return false;
-      }
-    } catch (e) {
-      _errorMessage = 'Connection error: ${e.toString()}';
-      _status = AuthStatus.connectionError;
-      notifyListeners();
-      return false;
-    }
+    if (_token == null) return false;
+    // Just keep the current user
+    return true;
   }
 
-  // Retry connection
+  // --- MOCK CONNECTION RETRY ---
   Future<void> retryConnection() async {
-    if (_status == AuthStatus.connectionError) {
-      _status = AuthStatus.loading;
-      notifyListeners();
-
-      await Future.delayed(const Duration(seconds: 1));
-
-      if (_token != null) {
-        await refreshUserProfile();
-      } else {
-        _status = AuthStatus.unauthenticated;
-        notifyListeners();
-      }
-    }
+    _status = AuthStatus.loading;
+    notifyListeners();
+    await Future.delayed(const Duration(milliseconds: 500));
+    _status = AuthStatus.authenticated; // Assume connection fixed
+    notifyListeners();
   }
 
-  // Add a getter to easily access the user role
-  String? get userRole => user?.role;
-
-  // Get the dashboard data using emergency reports endpoint
+  // --- MOCK DASHBOARD DATA ---
   Future<Map<String, dynamic>?> getDashboardData() async {
-    try {
-      if (user == null) return null;
+    await Future.delayed(const Duration(milliseconds: 800));
 
-      final response = await http.get(
-        Uri.parse(_buildUrl('emergency/reports/')),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $_token',
-        },
-      );
-
-      if (response.statusCode == 200) {
-        final reports = jsonDecode(response.body);
-
-        // Count status occurrences
-        int pending = 0;
-        int responding = 0;
-        int onScene = 0;
-
-        for (final report in reports) {
-          final status = report['status'] ?? 'PENDING';
-          if (status == 'PENDING') pending++;
-          if (status == 'RESPONDING') responding++;
-          if (status == 'ON_SCENE') onScene++;
-        }
-
-        // Format data to match expected dashboard structure
-        return {
-          'current_status': {
-            'pending': pending,
-            'responding': responding,
-            'on_scene': onScene,
-          },
-          'pending_emergencies':
-              reports.where((r) => r['status'] == 'PENDING').toList(),
-        };
-      } else {
-        _errorMessage = 'Failed to get emergency reports';
-        return null;
+    // Fake Emergency Reports
+    final List<Map<String, dynamic>> dummyReports = [
+      {
+        'id': 'inc_001',
+        'type': 'Fire',
+        'description': 'Small fire in kitchen',
+        'location': 'Dhanmondi 27',
+        'status': 'PENDING',
+        'timestamp': DateTime.now().subtract(Duration(minutes: 5)).toString(),
+      },
+      {
+        'id': 'inc_002',
+        'type': 'Medical',
+        'description': 'Road accident, minor injuries',
+        'location': 'Gulshan 1',
+        'status': 'RESPONDING',
+        'timestamp': DateTime.now().subtract(Duration(minutes: 25)).toString(),
       }
-    } catch (e) {
-      _errorMessage = 'Error: ${e.toString()}';
-      return null;
-    }
+    ];
+
+    return {
+      'current_status': {
+        'pending': 1,
+        'responding': 1,
+        'on_scene': 0,
+      },
+      'pending_emergencies': dummyReports.where((r) => r['status'] == 'PENDING').toList(),
+    };
   }
 
-  // Update emergency status
+  // --- MOCK STATUS UPDATE ---
   Future<Map<String, dynamic>?> updateEmergencyStatus(
     String emergencyId,
     String status,
   ) async {
-    try {
-      // Correct API endpoint format: emergency/reports/{id}/
-      final response = await http.patch(
-        Uri.parse(_buildUrl('emergency/reports/$emergencyId/')),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $_token',
-        },
-        body: jsonEncode({'status': status}),
-      );
-
-      if (response.statusCode == 200) {
-        return jsonDecode(response.body);
-      } else {
-        _errorMessage =
-            'Failed to update emergency status: ${response.statusCode}';
-        debugPrint('Error response: ${response.body}');
-        return null;
-      }
-    } catch (e) {
-      _errorMessage = 'Error: ${e.toString()}';
-      return null;
-    }
-  }
-
-  // Format error message from response data
-  String _formatErrorMessage(Map<String, dynamic> data) {
-    if (data.containsKey('detail')) {
-      return data['detail'];
-    }
-
-    // Handle validation errors
-    final errors = <String>[];
-    data.forEach((key, value) {
-      if (value is List) {
-        errors.add('$key: ${value.join(', ')}');
-      } else {
-        errors.add('$key: $value');
-      }
-    });
-
-    return errors.isNotEmpty ? errors.join('\n') : 'Registration failed';
+    await Future.delayed(const Duration(milliseconds: 500));
+    return {'status': status, 'success': true};
   }
 }
